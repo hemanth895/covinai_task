@@ -1,0 +1,197 @@
+from datetime import datetime,timedelta
+from flask import Flask, request, jsonify, abort
+from models import db, User, Expense
+import jwt
+#from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+from dotenv import load_dotenv
+import os
+from flask_bcrypt import Bcrypt
+
+
+bcrypt = Bcrypt()
+
+
+
+
+
+app = Flask(__name__)
+
+# Update the database URI to connect to PostgreSQL
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:root@127.0.0.1:5432/covinAI'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+load_dotenv()
+
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['ALGORITHMS'] = os.getenv('ALGORITHMS')
+
+
+db.init_app(app)
+
+
+#@app.before_first_request
+#def create_tables():
+#    db.create_all()
+
+
+# Ensure tables are created when the application starts
+with app.app_context():
+    db.create_all()
+    
+    
+# auth middleware i implemented as decorator func:
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+          # Bearer token format, so we need to split and get the token part
+        if token.startswith('Bearer '):
+            token = token.split('Bearer ')[1]
+        else:
+            return jsonify({'message': 'Token format is incorrect!'}), 403
+        
+        
+        print("token  -- "+ token)
+
+
+        try:
+            print("secret key"+app.config['SECRET_KEY'])
+            print("alogritms "+app.config['ALGORITHMS'])
+
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms= app.config['ALGORITHMS'])
+            current_user = User.query.filter_by(id=data['user_id']).first()
+            #current_user = User.query.get(1)  # Retrieve user using primary key
+
+        except:
+            return jsonify({'message': 'Token is invalid!'}), 403
+        
+        return f(current_user, *args, **kwargs)
+
+    return decorated
+
+    
+    
+    
+#authentication endpoints
+    
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    print(data)
+    #hashed_password = bcrypt.generate_password_hash(data['password'], method='sha256')
+    hashed_password = bcrypt.generate_password_hash(data['password'])
+
+    new_user = User(email=data['email'], name=data['name'], mobile=data['mobile'], password_hash=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'User registered successfully'}), 201
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(email=data['email']).first()
+    
+    print("/login")
+    print(data)
+    print(user.password_hash)
+    
+
+#or not bcrypt.check_password_hash(user.password_hash, data['password'])
+    if not user :
+        return jsonify({'message': 'Invalid credentials'}), 401
+
+    #token = jwt.encode({'user_id': user.id, 'exp': datetime.utcnow() + datetime.timedelta(hours=24)}, app.config['SECRET_KEY'], algorithm="HS256")
+    # Update this line
+    token = jwt.encode({'user_id': user.id, 'exp': datetime.utcnow() + timedelta(hours=24)},
+                    app.config['SECRET_KEY'], algorithm='HS256')
+    return jsonify({'token': token})
+
+
+#user endpoints
+    
+@app.route("/",methods=['GET'])
+def helloworld():
+    return jsonify({"message":"hello world"})
+
+#create user endpoint
+
+
+@app.route('/users', methods=['POST'])
+@token_required
+def create_user(current_user):
+    data = request.get_json()
+    new_user = User(email=data['email'], name=data['name'], mobile=data['mobile'])
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'User created successfully'}), 201
+
+@app.route('/users/<int:user_id>', methods=['GET'])
+@token_required
+def get_user(current_user,user_id):
+    user = User.query.get_or_404(user_id)
+    return jsonify({'email': user.email, 'name': user.name, 'mobile': user.mobile})
+
+
+#expenses endpoints
+
+@app.route('/expenses', methods=['POST'])
+@token_required
+def add_expense(current_user):
+    data = request.get_json()
+    if 'split_method' in data and data['split_method'] == 'percentage':
+        if sum(data['percentages'].values()) != 100:
+            return abort(400, description='Percentages must add up to 100')
+    new_expense = Expense(
+        description=data['description'],
+        total_amount=data['total_amount'],
+        split_method=data['split_method'],
+        user_id=data['user_id']
+    )
+    db.session.add(new_expense)
+    db.session.commit()
+    return jsonify({'message': 'Expense added successfully'}), 201
+
+@app.route('/users/<int:user_id>/expenses', methods=['GET'])
+@token_required
+def get_user_expenses(current_user,user_id):
+    user = User.query.get_or_404(user_id)
+    expenses = user.expenses
+    result = []
+    for expense in expenses:
+        result.append({
+            'description': expense.description,
+            'total_amount': expense.total_amount,
+            'split_method': expense.split_method
+        })
+    return jsonify(result)
+
+
+@app.route('/expenses/overall', methods=['GET'])
+@token_required
+def get_overall_expenses(current_user):
+    expenses = Expense.query.all()
+    total_expenses = sum(expense.total_amount for expense in expenses)
+    return jsonify({'total_expenses': total_expenses})
+
+@app.route('/balance-sheet', methods=['GET'])
+@token_required
+def download_balance_sheet():
+    # Call the function to generate the balance sheet
+    balance_sheet = generate_balance_sheet()
+    # Logic to download the balance sheet as a file
+    return jsonify({
+        "message":"balance sheet"
+    })
+
+
+
+def generate_balance_sheet():
+    # Logic to calculate balances based on the expenses
+    print("generate_balance_sheet")
+    
+    
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
