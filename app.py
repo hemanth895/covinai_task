@@ -99,19 +99,19 @@ def login():
     data = request.get_json()
     user = User.query.filter_by(email=data['email']).first()
     
-    print("/login")
-    print(data)
-    print(user.password_hash)
-    
-
-#or not bcrypt.check_password_hash(user.password_hash, data['password'])
-    if not user :
+    if user is None:
         return jsonify({'message': 'Invalid credentials'}), 401
 
-    #token = jwt.encode({'user_id': user.id, 'exp': datetime.utcnow() + datetime.timedelta(hours=24)}, app.config['SECRET_KEY'], algorithm="HS256")
-    # Update this line
-    token = jwt.encode({'user_id': user.id, 'exp': datetime.utcnow() + timedelta(hours=24)},
-                    app.config['SECRET_KEY'], algorithm='HS256')
+    # Check if the password is correct
+    if not bcrypt.check_password_hash(user.password_hash, data['password']):
+        return jsonify({'message': 'Invalid credentials'}), 401
+
+    # Generate JWT token
+    token = jwt.encode({
+        'user_id': user.id,
+        'exp': datetime.utcnow() + timedelta(hours=24)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+
     return jsonify({'token': token})
 
 
