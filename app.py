@@ -7,6 +7,10 @@ from functools import wraps
 from dotenv import load_dotenv
 import os
 from flask_bcrypt import Bcrypt
+import pandas as pd
+from io import StringIO
+from flask import send_file
+
 
 
 bcrypt = Bcrypt()
@@ -202,10 +206,51 @@ def download_balance_sheet():
 
 
 
+
 def generate_balance_sheet():
-    # Logic to calculate balances based on the expenses
-    print("generate_balance_sheet")
-    
+    # Query all expenses and participants
+    expenses = Expense.query.all()
+    participants_balances = {}
+
+    for expense in expenses:
+        participants = ExpenseParticipant.query.filter_by(expense_id=expense.id).all()
+        total_amount = expense.total_amount
+
+        if expense.split_type == 'equal':
+            amount_per_person = total_amount / len(participants)
+            for participant in participants:
+                user_id = participant.user_id
+                if user_id not in participants_balances:
+                    participants_balances[user_id] = 0
+                participants_balances[user_id] -= amount_per_person
+                
+        elif expense.split_type == 'exact':
+            for participant in participants:
+                user_id = participant.user_id
+                amount_owed = participant.amount_owed
+                if user_id not in participants_balances:
+                    participants_balances[user_id] = 0
+                participants_balances[user_id] -= amount_owed
+                
+        elif expense.split_type == 'percentage':
+            for participant in participants:
+                user_id = participant.user_id
+                amount_owed = (participant.amount_owed / total_amount) * 100
+                if user_id not in participants_balances:
+                    participants_balances[user_id] = 0
+                participants_balances[user_id] -= amount_owed
+
+    # Convert balances to a DataFrame
+    data = [{'user_id': user_id, 'balance': balance} for user_id, balance in participants_balances.items()]
+    df = pd.DataFrame(data)
+
+    # Generate CSV
+    output = StringIO()
+    df.to_csv(output, index=False)
+    output.seek(0)
+
+    return output
+
     
 
 
