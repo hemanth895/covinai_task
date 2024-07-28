@@ -1,6 +1,6 @@
 from datetime import datetime,timedelta
 from flask import Flask, request, jsonify, abort
-from models import db, User, Expense
+from models import ExpenseParticipant, db, User, Expense
 import jwt
 #from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -136,19 +136,35 @@ def get_user(current_user,user_id):
 #expenses endpoints
 
 @app.route('/expenses', methods=['POST'])
-@token_required
-def add_expense(current_user):
+def add_expense():
     data = request.get_json()
-    if 'split_method' in data and data['split_method'] == 'percentage':
-        if sum(data['percentages'].values()) != 100:
-            return abort(400, description='Percentages must add up to 100')
-    new_expense = Expense(
-        description=data['description'],
-        total_amount=data['total_amount'],
-        split_method=data['split_method'],
-        user_id=data['user_id']
-    )
+    description = data['description']
+    total_amount = data['total_amount']
+    created_by = data['created_by']
+    split_type = data['split_type']
+    participants = data['participants']
+
+    new_expense = Expense(description=description, total_amount=total_amount, created_by=created_by, split_type=split_type)
     db.session.add(new_expense)
+    db.session.commit()
+
+    expense_id = new_expense.id
+
+    if split_type == 'equal':
+        amount_per_person = total_amount / len(participants)
+        for user_id in participants:
+            new_participant = ExpenseParticipant(expense_id=expense_id, user_id=user_id, amount_owed=amount_per_person)
+            db.session.add(new_participant)
+    elif split_type == 'exact':
+        for participant in participants:
+            new_participant = ExpenseParticipant(expense_id=expense_id, user_id=participant['user_id'], amount_owed=participant['amount_owed'])
+            db.session.add(new_participant)
+    elif split_type == 'percentage':
+        for participant in participants:
+            amount_owed = (participant['percentage'] / 100) * total_amount
+            new_participant = ExpenseParticipant(expense_id=expense_id, user_id=participant['user_id'], amount_owed=amount_owed)
+            db.session.add(new_participant)
+    
     db.session.commit()
     return jsonify({'message': 'Expense added successfully'}), 201
 

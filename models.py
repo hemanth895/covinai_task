@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 #from werkzeug.security import generate_password_hash, check_password_hash
 
 from flask_bcrypt import Bcrypt
+from datetime import datetime
 
 
 
@@ -12,25 +13,21 @@ bcrypt = Bcrypt()
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    name = db.Column(db.String(50), nullable=False)
-    mobile = db.Column(db.String(20), nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-
-    def set_password(self, password):
-        #self.password_hash = generate_password_hash(password)
-        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-
-
-    def check_password(self, password):
-        #return check_password_hash(self.password_hash, password)
-        return bcrypt.check_password_hash(self.password_hash, password)
-
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    mobile = db.Column(db.String(15), nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
 
 class Expense(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
     total_amount = db.Column(db.Float, nullable=False)
-    split_method = db.Column(db.String(20), nullable=False)  # 'equal', 'exact', 'percentage'
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    split_type = db.Column(db.String(10), nullable=False)  # 'equal', 'exact', 'percentage'
+
+class ExpenseParticipant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    expense_id = db.Column(db.Integer, db.ForeignKey('expense.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    user = db.relationship('User', backref=db.backref('expenses', lazy=True))
+    amount_owed = db.Column(db.Float, nullable=False)
