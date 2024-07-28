@@ -22,7 +22,10 @@ bcrypt = Bcrypt()
 app = Flask(__name__)
 
 # Update the database URI to connect to PostgreSQL
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:root@127.0.0.1:5432/covinAI'
+
+#app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:root@127.0.0.1:5432/covinAI'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:hemanth017049@covinaitaskdb.c5m8em6amu3d.us-east-2.rds.amazonaws.com:5432/covinaitaskdb'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 load_dotenv()
