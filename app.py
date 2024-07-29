@@ -98,9 +98,18 @@ def register():
 def login():
     data = request.get_json()
     user = User.query.filter_by(email=data['email']).first()
-    
+
     if user is None:
         return jsonify({'message': 'Invalid credentials'}), 401
+    
+    print(app.config['SQLALCHEMY_DATABASE_URI'])
+    print(app.config['SECRET_KEY'])
+    print(app.config['ALGORITHMS'])
+
+
+
+    # Print stored password hash for debugging
+    print(f"Stored password hash: {user.password_hash}")
 
     # Check if the password is correct
     if not bcrypt.check_password_hash(user.password_hash, data['password']):
@@ -113,6 +122,7 @@ def login():
     }, app.config['SECRET_KEY'], algorithm='HS256')
 
     return jsonify({'token': token})
+
 
 
 #user endpoints
